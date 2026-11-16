@@ -1,7 +1,7 @@
 # Call Me Taxi: Ride-Hailing Platform Engineering Case Study
 
-> A ride-hailing platform in production in Yangon: a native Android app for customers, drivers and operations staff (about 1,000 drivers), today on a managed Backend-as-a-Service.
-> **callme-core** is the self-hosted backend built to replace it: realtime dispatch, live trip tracking and wallet settlement on a single 4 vCPU / 8 GB server. It runs the same app against copies of production data on its own server and is being prepared for cutover.
+> A ride-hailing platform live in Yangon: a native Android app for customers, drivers and operations staff (about 1,000 drivers), with **callme-core**, the self-hosted backend I built to replace a managed Backend-as-a-Service.
+> It runs realtime dispatch, live trip tracking and wallet settlement on a single 4 vCPU / 8 GB server.
 
 ![Kotlin](https://img.shields.io/badge/Android-Kotlin%20%7C%20Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Backend-Node.js%2022%20%7C%20Fastify-339933?logo=node.js&logoColor=white)
@@ -24,7 +24,7 @@ This repository is the **public case study** of the project: architecture, desig
 | Chat sync calls per minute per active phone | 27 | **7** (delta sync on foreground) |
 | Phones with a wrong clock (seen: **77 s** ahead) | orders hidden, early accept, GPS refused | handled: every business time is stamped by the server |
 | Hosting | managed Backend-as-a-Service with per-request billing | **one 4 vCPU / 8 GB VPS** |
-| Load test, copy of production data | — | **200 active drivers: 0 server errors, every simultaneous accept had exactly one winner**; 500 drivers with the load generator off the server: 0 errors, CPU-bound, and two API processes halved the latency (GPS write p50 963 → 205 ms) |
+| Load test (copy of production data) | — | **200 active drivers: 0 server errors, every simultaneous accept had exactly one winner**; 500 drivers with the load generator off the server: 0 errors, CPU-bound, and two API processes halved the latency (GPS write p50 963 → 205 ms) |
 
 ---
 

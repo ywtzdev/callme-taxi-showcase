@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-  T["tests<br/>45 backend tests on real PostgreSQL"] --> P["package release zip<br/>(no secrets, no node_modules)"]
+  T["tests<br/>77 backend tests on real PostgreSQL"] --> P["package release zip<br/>(no secrets, no node_modules)"]
   P --> S["step script on VPS<br/>upgrade → migrate → health check"]
   S --> V["verify<br/>smoke test + targeted live drill"]
   V -->|problem| R[roll back to previous release]

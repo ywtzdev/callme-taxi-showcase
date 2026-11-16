@@ -1,14 +1,14 @@
 # Call Me Taxi: Ride-Hailing Platform Engineering Case Study
 
-> A ride-hailing platform in production in Yangon: a native Android app for customers, drivers and operations staff, with **callme-core**, a self-hosted backend built for it.
-> The backend handles realtime dispatch to about 1,000 drivers, live trip tracking and wallet settlement, and runs on a single 4 vCPU / 8 GB server.
+> A ride-hailing platform in production in Yangon: a native Android app for customers, drivers and operations staff (about 1,000 drivers), today on a managed Backend-as-a-Service.
+> **callme-core** is the self-hosted backend built to replace it: realtime dispatch, live trip tracking and wallet settlement on a single 4 vCPU / 8 GB server. It runs the same app against copies of production data on its own server and is being prepared for cutover.
 
 ![Kotlin](https://img.shields.io/badge/Android-Kotlin%20%7C%20Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Backend-Node.js%2022%20%7C%20Fastify-339933?logo=node.js&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/Data-PostgreSQL%2016%20%7C%20PostGIS-4169E1?logo=postgresql&logoColor=white)
 ![Realtime](https://img.shields.io/badge/Realtime-WebSocket%20%7C%20LISTEN%2FNOTIFY-0A7EA4)
 ![Docker](https://img.shields.io/badge/Ops-Docker%20Compose%20%7C%20Caddy%20TLS-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/Backend%20tests-45%20automated%20%2B%20live%20dispatch%20drills-success)
+![Tests](https://img.shields.io/badge/Backend%20tests-77%20on%20real%20PostgreSQL%20%2B%20end--to--end%20smoke-success)
 
 This repository is the **public case study** of the project: architecture, design decisions, security model and the production problems that were diagnosed and fixed. The application and backend source are private. Qualified reviewers can ask for a guided code walkthrough.
 
@@ -23,7 +23,8 @@ This repository is the **public case study** of the project: architecture, desig
 | Idle job-queue queries per minute | ~2,900 | **183** (NOTIFY-driven wake-up + one safety poll) |
 | Chat sync calls per minute per active phone | 27 | **7** (delta sync on foreground) |
 | Phones with a wrong clock (seen: **77 s** ahead) | orders hidden, early accept, GPS refused | handled: every business time is stamped by the server |
-| Hosting | managed Backend-as-a-Service with per-request billing | **one 4 vCPU / 8 GB VPS**, load-tested at the agreed peak of **200 concurrently active drivers** with a 200 ms p95 budget |
+| Hosting | managed Backend-as-a-Service with per-request billing | **one 4 vCPU / 8 GB VPS** |
+| Load test, copy of production data | — | **200 active drivers: 0 server errors, every simultaneous accept had exactly one winner**; 500 drivers with the load generator off the server: 0 errors, CPU-bound, and two API processes halved the latency (GPS write p50 963 → 205 ms) |
 
 ---
 
@@ -100,6 +101,20 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Argon2-protected admin console with an audit log and a read-only SQL role.
 - Secrets live only on the server (never in the app, in git or in chat).
 - Firewall and fail2ban are configured on the host.
+
+---
+
+## November 2026: second hardening round
+
+Measured, not estimated: every item below was verified with tests on real PostgreSQL, an end-to-end run on a scratch copy of the stack, or on a real phone.
+
+- **One backend for two companies.** Call Me and its sister product share one monorepo; 50 files must stay byte-identical and a pre-commit check enforces it, so a fix in one product cannot silently drift from the other. Each company still runs on its own server.
+- **Deploys that can undo themselves.** Database dump first, new image, readiness gate, automatic rollback to the kept previous image. Restore drills rebuild a scratch database from the backup and compare row counts, wallet sums and migrations with live.
+- **Durable jobs.** A Postgres job queue with per-attempt lease tokens: a worker that dies mid-job cannot complete or double-run someone else's lease.
+- **Identity rules owned by the server.** One live account per phone number in any format (`09…`, `+959…`); a permanently banned phone stays banned even after its account is deleted; deleted User IDs are never handed out again, and trips of a deleted person stay in history, labelled *(Deleted)*.
+- **Passcodes** are argon2id on the server; admin-console sessions are stored hashed in the database, so several API processes and restarts share them.
+- **Real-phone testing found what unit tests could not:** the release build crashed at launch because resource shrinking removed the crash reporter's build ID. Fixed with a keep rule, verified on the phone. Every app coroutine now runs under a crash guard that reports instead of killing the app.
+- **Hosts:** SSH key-only (password login refused), firewall and fail2ban, Telegram alerts for dead jobs, worker heartbeat, disk and backup age.
 
 ---
 

@@ -5,7 +5,7 @@
 | Goal | Consequence for the design |
 |---|---|
 | **No visible change for ~1,000 existing users** when the backend moved | The new backend speaks the API the shipped Android app already uses (document queries, realtime channels, storage URLs, function executions). Existing clients keep working while new app versions roll out. |
-| **Fast on modest hardware** | One VPS, 4 vCPU / 8 GB. Every hot path is measured (`pg_stat_statements`, per-action p50/p95) and tuned against a 200 ms p95 budget at 200 concurrently active drivers. |
+| **Fast on modest hardware** | One VPS: it started on 4 vCPU / 8 GB and now runs on 6 vCPU / 12 GB, sized for about 600 concurrent users. Every hot path is measured (`pg_stat_statements`, per-action p50/p95) and tuned against a 200 ms p95 budget at 200 concurrently active drivers. |
 | **Business rules enforced by the server** | Phones express intent. The server validates session, role, order state and money before any write. |
 | **Operable by one person** | One `docker compose` project, one-command upgrades with the previous release kept for rollback, automated backups and alerting. |
 
@@ -102,7 +102,7 @@ flowchart LR
 
 - One Docker Compose project (`db`, `api`, `realtime`, `worker`, `migrate`), with Caddy in front for automatic TLS.
 - Secrets live in a root-only env file and a mounted secrets directory on the server. They are never in the image, in git or in the app.
-- Postgres is tuned for 4 vCPU / 8 GB:
+- Postgres was first tuned for the original 4 vCPU / 8 GB host:
   - `shared_buffers` 2 GB, `effective_cache_size` 5 GB, `work_mem` 16 MB;
   - JIT off, because it is pure CPU cost for an OLTP workload;
   - `pg_stat_statements` on;

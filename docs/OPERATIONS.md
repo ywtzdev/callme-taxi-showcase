@@ -45,6 +45,7 @@ flowchart LR
 
 ## Cost and capacity
 
-- One 4 vCPU / 8 GB VPS runs everything. Postgres is capped at 4 GB and the app containers have their own memory limits.
+- One VPS runs everything: 6 vCPU / 12 GB, sized for about 600 concurrent users. It started on 4 vCPU / 8 GB, and the load tests on that host (see the README) showed the API was CPU-bound, so it was upgraded. Postgres and the app containers each have their own memory limits.
+- The sister product, Mingalarpar, has fewer users and runs on its own 4 vCPU / 8 GB VPS.
 - The busiest write path (driver positions, every few seconds per online driver) uses an UNLOGGED table and coalesced realtime fan-out.
 - Capacity headroom is checked with the same load harness before each larger change.

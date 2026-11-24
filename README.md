@@ -1,14 +1,14 @@
 # Call Me Taxi: Ride-Hailing Platform Engineering Case Study
 
 > A ride-hailing platform live in Yangon: a native Android app for customers, drivers and operations staff (about 1,000 drivers), with **callme-core**, the self-hosted backend I built to replace a managed Backend-as-a-Service.
-> It runs realtime dispatch, live trip tracking and wallet settlement on a single 4 vCPU / 8 GB server.
+> It runs realtime dispatch, live trip tracking and wallet settlement on a single 6 vCPU / 12 GB server.
 
 ![Kotlin](https://img.shields.io/badge/Android-Kotlin%20%7C%20Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Backend-Node.js%2022%20%7C%20Fastify-339933?logo=node.js&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/Data-PostgreSQL%2016%20%7C%20PostGIS-4169E1?logo=postgresql&logoColor=white)
 ![Realtime](https://img.shields.io/badge/Realtime-WebSocket%20%7C%20LISTEN%2FNOTIFY-0A7EA4)
-![Docker](https://img.shields.io/badge/Ops-Docker%20Compose%20%7C%20Caddy%20TLS-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/Backend%20tests-77%20on%20real%20PostgreSQL%20%2B%20end--to--end%20smoke-success)
+![Docker](https://img.shields.io/badge/Ops-Docker%20Compose%20%7C%20Caddy%20mTLS-2496ED?logo=docker&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-268%20Android%20%2B%20PostgreSQL%20%2B%2080--order%20FCM%20audit-success)
 
 This repository is the **public case study** of the project: architecture, design decisions, security model and the production problems that were diagnosed and fixed. The application and backend source are private. Qualified reviewers can ask for a guided code walkthrough.
 
@@ -23,8 +23,9 @@ This repository is the **public case study** of the project: architecture, desig
 | Idle job-queue queries per minute | ~2,900 | **183** (NOTIFY-driven wake-up + one safety poll) |
 | Chat sync calls per minute per active phone | 27 | **7** (delta sync on foreground) |
 | Phones with a wrong clock (seen: **77 s** ahead) | orders hidden, early accept, GPS refused | handled: every business time is stamped by the server |
-| Hosting | managed Backend-as-a-Service with per-request billing | **one 4 vCPU / 8 GB VPS** |
-| Load test (copy of production data) | — | **200 active drivers: 0 server errors, every simultaneous accept had exactly one winner**; 500 drivers with the load generator off the server: 0 errors, CPU-bound, and two API processes halved the latency (GPS write p50 963 → 205 ms) |
+| Hosting | managed Backend-as-a-Service with per-request billing | **one 6 vCPU / 12 GB VPS** (upgraded from 4 vCPU / 8 GB) |
+| Load test (copy of production data) | — | **200 active drivers: 0 server errors, every simultaneous accept had exactly one winner**; 500 drivers with the load generator off the server: 0 errors, CPU-bound on 4 vCPU, and two API processes halved the latency (GPS write p50 963 → 205 ms) |
+| 80-order continuous FCM & realtime audit (40 app + 40 customer) | 8 silent push/popup bugs exposed before audit | **0 failed pushes, 0 suppressed recipients, 0 dead jobs** across offer → accept → chat → cancel/complete |
 
 ---
 
@@ -127,6 +128,17 @@ Measured, not estimated: every item below was verified with tests on real Postgr
 - **Worst-case burst test.** 200 drivers online with live sockets and GPS; at the same instant 30 app orders, 50 manual trips and 20 customer bookings, each driven to the end of the trip, on a scratch copy of production data. It found three problems, now fixed: order-number allocation retried itself into failures (now taken in turns), dispatch jobs waiting between waves used up the worker slots (12 → 48), and a 15 s socket timeout dropped queued requests.
   - Call Me: **100 of 100 flows completed, 0 errors.** The burst first exposed that every app order was offered to all ~1,100 registered drivers (1,326 offer rows per order); orders now go only to drivers who are online (presence within 5 minutes) plus staff, as on the sister product: 207 offer rows per order. On the single 4 vCPU server that also hosted the load generator, a 30-orders-in-one-second burst still takes ~34 s median to reach a driver (one order alone: 3.3 s). The live system stayed responsive during the test (~0.2 s median).
   - Sister product on the same platform: 100 of 100 flows, 0 errors.
+
+---
+
+## Late November 2026: push reliability, live admin escalation & cross-company distance dispatch
+
+- **80-order continuous push & realtime audit.** Ran 40 app orders and 40 customer bookings end-to-end (offer, accept, private chat, cancel, complete) against an isolated scratch copy of live data with a push capture sink. Found and fixed 8 production delivery bugs (including customer acceptance audience filtering, missing smart-offer metadata on global order pushes, stale bystander popups after pending cancel/freeze, customer own-order routing, and cross-account token collisions) — post-fix audit: **0 failed pushes, 0 suppressed recipients, 0 dead jobs**.
+- **Fresh-login first-order popup reliability.** Claiming a device's FCM token is now atomic across accounts on login (clearing stale ownership on shared phones) and the realtime stream explicitly publishes `DispatchOffer` updates, eliminating missed popups immediately after a fresh sign-in.
+- **One-tap live Admin escalation in Private Chat.** Drivers and customers can tap *Connect with Admin* inside any active trip chat. Operations staff (Super Admin, Admin, Monitor) receive an FCM alert, a Notification Center entry, and a live **Support Chat** escalation inbox backed by an active-trip join — staff can reply live inside both local and cross-company trip chats, and escalations clear automatically as soon as the trip completes or cancels.
+- **Cross-company Distance Order transfer.** Distance orders can now be transferred to the sister company carrying their pickup coordinates (`dispatch center` + `pickup` coordinates); the receiving company applies **its own** distance ring rules rather than the sender's, while the originating company dismisses stale driver popups cleanly.
+- **Universal cancellation finance & arrival lock.** Unified order cancellation settlement (*No Fee*, *2,000 Ks driver compensation*, *commission deduction*) across local and transferred orders with a dedicated transfer penalty ledger, locked automatically once the driver arrives or departs.
+- **Edge mTLS & Compose UI smoothness.** Hardened Caddy with **Cloudflare Authenticated Origin Pulls (mTLS)**, strict security headers, and IPv6 origin firewalling; fixed Notification Bell and Chat Bell reliability edge cases and polished Jetpack Compose responsiveness with off-main-thread media decoding and recomposition isolation (268 Android unit tests; 66 shared backend modules enforced byte-identical across both companies).
 
 ---
 
